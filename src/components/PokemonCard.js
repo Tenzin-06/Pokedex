@@ -1,6 +1,7 @@
+import { memo } from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 
-export default function PokemonCard({ id, name, image, onPress }) {
+function PokemonCard({ id, name, image, onPress }) {
     return (
         <Pressable style={styles.card} onPress={onPress}>
             <Image source={{ uri: image }} style={styles.image} />
@@ -11,6 +12,8 @@ export default function PokemonCard({ id, name, image, onPress }) {
         </Pressable>
     );
 }
+
+export default memo(PokemonCard);
 
 const styles = StyleSheet.create({
     card: {
