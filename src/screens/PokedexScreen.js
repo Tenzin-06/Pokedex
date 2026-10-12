@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Button, FlatList, ActivityIndicator, StyleSheet } from 'react-native';
-import { fetchPokemonPage } from '../api';
+import { View, Text, Button, FlatList, ActivityIndicator, TextInput, StyleSheet } from 'react-native';
+import { fetchPokemonPage, fetchAllPokemon } from '../api';
 import PokemonCard from '../components/PokemonCard';
 
 const PAGE_SIZE = 20;
@@ -14,6 +14,11 @@ export default function PokedexScreen({ navigation }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(null);
+  const [query, setQuery] = useState('');
+  const [allPokemon, setAllPokemon] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [searchError, setSearchError] = useState(null);
 
   const loadFirstPage = async () => {
     setLoading(true);
@@ -60,6 +65,19 @@ export default function PokedexScreen({ navigation }) {
     }
   };
 
+  const ensureAllLoaded = async () => {
+    if (allPokemon) return allPokemon;
+    setSearching(true);
+
+    try {
+        const all = await fetchAllPokemon();
+        setAllPokemon(all);
+        return all;
+    } finally {
+        setSearching(false);
+    }
+  };
+
   const openDetail = useCallback(
     (id) => navigation.navigate('Detail', { id }),
     [navigation]
@@ -81,6 +99,30 @@ export default function PokedexScreen({ navigation }) {
     loadFirstPage();
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+        const text = query.trim().toLowerCase();
+        setDebouncedQuery(text);
+        
+        if (text !== ''){
+            setSearchError(null);
+
+            try {
+                await ensureAllLoaded();
+            } catch (err) {
+                setSearchError('Search failed. Check your internet connection.');
+            }
+        }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const results = 
+    debouncedQuery && allPokemon
+        ? allPokemon.filter((p) => p.name.includes(debouncedQuery))
+        : null;
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -99,16 +141,35 @@ export default function PokedexScreen({ navigation }) {
   }
 
   return (
-    <FlatList
-      data={pokemon}
-      keyExtractor={(item) => String(item.id)}
-      renderItem={renderItem}
-      onEndReached={loadMore}
-      onEndReachedThreshold={0.5}
-      initialNumToRender={10}
-      windowSize={7}
-      ListFooterComponent={loadingMore ? <ActivityIndicator style={{ margin: 16 }} /> : null}
-    />
+    <View style={styles.screen}>
+        <TextInput 
+            style={styles.search}
+            placeholder="Search all Pokemon"
+            value={query}
+            onChangeText={setQuery}
+            autoCorrect={false}
+            autoCapitalize='none'
+        />
+        {searching && <ActivityIndicator style={{ margin: 12 }} />}
+        {searchError && <Text style={styles.empty}>{searchError}</Text>}
+
+        <FlatList
+            data={results ?? pokemon}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            onEndReached={results ? null : loadMore}
+            onEndReachedThreshold={0.5}
+            initialNumToRender={10}
+            windowSize={7}
+            ListEmptyComponent={
+                results ? <Text style={styles.empty}>No Pokemon found for "{debouncedQuery}"</Text> : null
+            }
+            ListFooterComponent={
+                !results && loadingMore ? <ActivityIndicator style={{ margin: 16 }} /> : null
+            }
+        />
+
+    </View>
   );
 }
 
@@ -125,4 +186,21 @@ const styles = StyleSheet.create({
     textAlign: 'center', 
     marginBottom: 12 
   },
+
+  screen: { flex: 1 },
+  search: {
+    backgroundColor: '#fff',
+    margin: 12,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    height: 48,
+  },
+
+  empty: {
+    textAlign: 'center',
+    marginTop: 30,
+    color: '#666',
+  }
 });

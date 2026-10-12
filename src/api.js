@@ -24,3 +24,20 @@ export async function fetchPokemonPage(offset = 0, limit = 20) {
         };
     });
 }
+
+export async function fetchAllPokemon() {
+    const response = await fetch(`${BASE_URL}/pokemon?limit=1025`);
+
+    if (!response.ok) {
+        throw new Error('Request failed with status ' + response.status);
+    }
+
+    const data = await response.json();
+    return data.results.map((item) => {
+        const id = getIdFromUrl(item.url);
+        return {
+            id, name: item.name,
+            image: getArtworkUrl(id)
+        };
+    });
+}
